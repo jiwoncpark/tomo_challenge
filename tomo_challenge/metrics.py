@@ -116,7 +116,7 @@ def get_tracer_type(nbin, what):
     return tracer_type
 
 
-def compute_mean_covariance(tomo_bin, z, what):
+def compute_mean_covariance(tomo_bin, z, what, params={}, delta=0.01):
     """Compute a mean and covariance for the chosen distribution of objects.
 
     value can be 'ww' for shear-shear only, 'gg' for galaxy clustering and
@@ -134,6 +134,8 @@ def compute_mean_covariance(tomo_bin, z, what):
     n_eff_total_arcmin2 = 20.0
     # Use this fiducial cosmology, which is what I have for TXPipe
     config = yaml.safe_load(open(default_config_path))
+    for k in params.keys():
+        config['parameters'][k] += delta
     cosmo = ccl.Cosmology(**config['parameters'])
 
     # ell values we will use.  Computed centrally
@@ -297,7 +299,7 @@ def make_sacc(tomo_bin, z, what, mu, C):
     return S
 
 
-def figure_of_merit(sacc_data, what, galaxy_tracer_bias):
+def figure_of_merit(sacc_data, what, galaxy_tracer_bias, return_fisher=False):
     ntot = len(sacc_data.tracers)
     nbin = ntot//2 if what == "3x2" else ntot
     tracer_type = get_tracer_type(nbin, what)
@@ -358,9 +360,10 @@ def figure_of_merit(sacc_data, what, galaxy_tracer_bias):
     # Now run firecrown in a temporary directory
     # and load the resulting fisher matrix
     conf, data = firecrown.parse(config)
-    with tempfile.TemporaryDirectory() as tmp:
-        firecrown.run_cosmosis(conf, data, pathlib.Path(tmp))
-        fisher_matrix = np.loadtxt(f'{tmp}/chain.txt')
+    #with tempfile.TemporaryDirectory() as tmp:
+    tmp = 'tmp/'
+    firecrown.run_cosmosis(conf, data, pathlib.Path(tmp))
+    fisher_matrix = np.loadtxt(f'{tmp}/chain.txt')
 
     # Pull out the correct indices.  We would like to use
     # w0 - wa but can't yet because
@@ -379,4 +382,7 @@ def figure_of_merit(sacc_data, what, galaxy_tracer_bias):
     area = 6.17 * np.pi * np.sqrt(np.linalg.det(covmat_chunk))
     fom = 1 / area
 
-    return fom
+    if return_fisher:
+        return fom, fisher_matrix
+    else:
+        return fom
